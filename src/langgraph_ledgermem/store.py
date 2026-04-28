@@ -159,12 +159,18 @@ class LedgerMemStore(BaseStore):
         # requested namespace prefix even when many exist.
         fetch_limit = max(limit * 5, 50) if (op.namespace_prefix or op.filter) else limit
         response = self._client.search(query, limit=fetch_limit)
-        ns_prefix = _ns_to_str(op.namespace_prefix)
+        ns_prefix_tuple = tuple(op.namespace_prefix or ())
         op_filter = op.filter or {}
         out: list[SearchItem] = []
         for hit in getattr(response, "hits", []) or []:
             meta = getattr(hit, "metadata", {}) or {}
-            if ns_prefix and not str(meta.get("ns", "")).startswith(ns_prefix):
+            # Compare namespaces tuple-wise. The previous string-startswith
+            # check matched ``ns_prefix=("user",)`` against stored
+            # ``ns="users/123"`` because "users/123".startswith("user") is
+            # True — leaking memories from sibling namespaces whose first
+            # segment merely shared a string prefix.
+            hit_ns = _str_to_ns(str(meta.get("ns", "")))
+            if ns_prefix_tuple and hit_ns[: len(ns_prefix_tuple)] != ns_prefix_tuple:
                 continue
             if op_filter:
                 base_value_for_filter = None
