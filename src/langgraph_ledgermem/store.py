@@ -123,15 +123,31 @@ class LedgerMemStore(BaseStore):
 
     def _search(self, op: SearchOp) -> list[SearchItem]:
         query = op.query or ""
-        limit = op.limit or 10
-        response = self._client.search(query, limit=limit)
+        # op.limit may legitimately be 0; only fall back when None.
+        limit = 10 if op.limit is None else op.limit
+        # Over-fetch so namespace/filter pruning still leaves `limit` items.
+        # Without this, a large workspace can return zero matches inside the
+        # requested namespace prefix even when many exist.
+        fetch_limit = max(limit * 5, 50) if (op.namespace_prefix or op.filter) else limit
+        response = self._client.search(query, limit=fetch_limit)
         ns_prefix = _ns_to_str(op.namespace_prefix)
+        op_filter = op.filter or {}
         out: list[SearchItem] = []
         for hit in getattr(response, "hits", []) or []:
             meta = getattr(hit, "metadata", {}) or {}
             if ns_prefix and not str(meta.get("ns", "")).startswith(ns_prefix):
                 continue
-            base = self._hit_to_item(hit)
+            if op_filter:
+                base_value_for_filter = None
+                # SearchOp.filter applies to stored values; load lazily.
+                base = self._hit_to_item(hit)
+                base_value_for_filter = base.value if isinstance(base.value, dict) else None
+                if base_value_for_filter is None:
+                    continue
+                if not all(base_value_for_filter.get(k) == v for k, v in op_filter.items()):
+                    continue
+            else:
+                base = self._hit_to_item(hit)
             out.append(
                 SearchItem(
                     namespace=base.namespace,
@@ -142,6 +158,8 @@ class LedgerMemStore(BaseStore):
                     score=getattr(hit, "score", None),
                 )
             )
+            if len(out) >= limit:
+                break
         return out
 
     def _list_namespaces(self, op: ListNamespacesOp) -> list[tuple[str, ...]]:
