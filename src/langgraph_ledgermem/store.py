@@ -70,8 +70,28 @@ class LedgerMemStore(BaseStore):
             value = json.loads(raw)
         except json.JSONDecodeError:
             value = {"text": raw}
+        # Prefer real timestamps from the memory record; fall back to "now"
+        # only if the backend didn't supply them. Stamping every hit with
+        # the current time made created_at/updated_at useless for ordering
+        # and for incremental sync.
         now = datetime.now(timezone.utc)
-        return Item(value=value, key=key, namespace=ns, created_at=now, updated_at=now)
+        created_at = (
+            getattr(hit, "created_at", None)
+            or meta.pop("created_at", None)
+            or now
+        )
+        updated_at = (
+            getattr(hit, "updated_at", None)
+            or meta.pop("updated_at", None)
+            or created_at
+        )
+        return Item(
+            value=value,
+            key=key,
+            namespace=ns,
+            created_at=created_at,
+            updated_at=updated_at,
+        )
 
     # --- BaseStore API -----------------------------------------------------
 
@@ -97,15 +117,24 @@ class LedgerMemStore(BaseStore):
     # --- op handlers -------------------------------------------------------
 
     def _get(self, op: GetOp) -> Item | None:
-        memory_id = self._find_memory_id(op.namespace, op.key)
-        if memory_id is None:
-            return None
-        # Use a search call with the key as query to fetch the record back.
-        response = self._client.search(op.key, limit=10)
-        for hit in getattr(response, "hits", []) or []:
-            if getattr(hit, "id", None) == memory_id:
-                return self._hit_to_item(hit)
-        return None
+        # Walk the same listing we used to find the memory id and pull the
+        # record out directly. The previous implementation re-fetched via
+        # semantic search using op.key as the query, which silently returned
+        # None whenever the matching row wasn't in the top-10 search hits —
+        # i.e. for any non-trivial workspace the get() round-tripped to
+        # 'not found' even though _find_memory_id had just confirmed it.
+        ns_str = _ns_to_str(op.namespace)
+        cursor: str | None = None
+        while True:
+            page = self._client.list(limit=100, cursor=cursor)
+            items = getattr(page, "items", []) or getattr(page, "memories", []) or []
+            for item in items:
+                meta = getattr(item, "metadata", {}) or {}
+                if meta.get("ns") == ns_str and meta.get("key") == op.key:
+                    return self._hit_to_item(item)
+            cursor = getattr(page, "next_cursor", None)
+            if not cursor:
+                return None
 
     def _put(self, op: PutOp) -> None:
         ns_str = _ns_to_str(op.namespace)
@@ -176,4 +205,22 @@ class LedgerMemStore(BaseStore):
             cursor = getattr(page, "next_cursor", None)
             if not cursor:
                 break
+        # Honour ListNamespacesOp filters — without these the caller gets
+        # the entire workspace's namespace tree even when they asked for a
+        # specific prefix/suffix or a bounded depth. Both fields are
+        # tuple[MatchCondition, ...] in newer LangGraph and a plain prefix
+        # tuple in older versions; handle both shapes.
+        match_conditions = getattr(op, "match_conditions", None) or ()
+        for cond in match_conditions:
+            match_type = getattr(cond, "match_type", None)
+            path = tuple(getattr(cond, "path", ()) or ())
+            if not path:
+                continue
+            if match_type == "prefix":
+                seen = {ns for ns in seen if ns[: len(path)] == path}
+            elif match_type == "suffix":
+                seen = {ns for ns in seen if ns[-len(path) :] == path}
+        max_depth = getattr(op, "max_depth", None)
+        if isinstance(max_depth, int) and max_depth > 0:
+            seen = {ns[:max_depth] for ns in seen}
         return sorted(seen)
