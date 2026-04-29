@@ -7,12 +7,12 @@ import types
 from unittest.mock import MagicMock
 
 
-def _install_fake_ledgermem() -> None:
-    if "ledgermem" in sys.modules:
+def _install_fake_getmnemo() -> None:
+    if "getmnemo" in sys.modules:
         return
-    fake = types.ModuleType("ledgermem")
+    fake = types.ModuleType("getmnemo")
 
-    class LedgerMem:
+    class Mnemo:
         def __init__(self, *a, **k):
             pass
 
@@ -31,29 +31,29 @@ def _install_fake_ledgermem() -> None:
         def list(self, limit=20, cursor=None):
             return types.SimpleNamespace(items=[], next_cursor=None)
 
-    class AsyncLedgerMem(LedgerMem):
+    class AsyncMnemo(Mnemo):
         pass
 
-    fake.LedgerMem = LedgerMem
-    fake.AsyncLedgerMem = AsyncLedgerMem
-    sys.modules["ledgermem"] = fake
+    fake.Mnemo = Mnemo
+    fake.AsyncMnemo = AsyncMnemo
+    sys.modules["getmnemo"] = fake
 
 
-_install_fake_ledgermem()
+_install_fake_getmnemo()
 
-from langgraph_ledgermem import LedgerMemStore  # noqa: E402
-from ledgermem import LedgerMem  # noqa: E402
+from langgraph_getmnemo import MnemoStore  # noqa: E402
+from getmnemo import Mnemo  # noqa: E402
 
 
 def test_store_imports() -> None:
-    assert LedgerMemStore is not None
+    assert MnemoStore is not None
 
 
 def test_put_writes_to_sdk() -> None:
-    client = LedgerMem()
+    client = Mnemo()
     client.add = MagicMock(return_value=None)
     client.list = MagicMock(return_value=type("P", (), {"items": [], "next_cursor": None})())
-    store = LedgerMemStore(client)
+    store = MnemoStore(client)
     store.put(("users", "u1"), "profile", {"name": "Ada"})
     assert client.add.called
     args, kwargs = client.add.call_args
@@ -63,14 +63,14 @@ def test_put_writes_to_sdk() -> None:
 
 
 def test_search_filters_by_namespace_prefix() -> None:
-    client = LedgerMem()
+    client = Mnemo()
     hit = type(
         "Hit",
         (),
         {"id": "m1", "content": '{"name": "Ada"}', "metadata": {"ns": "users/u1", "key": "profile"}, "score": 0.8},
     )()
     client.search = MagicMock(return_value=type("R", (), {"hits": [hit]})())
-    store = LedgerMemStore(client)
+    store = MnemoStore(client)
     items = store.search(("users",), query="Ada")
     assert len(items) == 1
     assert items[0].value == {"name": "Ada"}

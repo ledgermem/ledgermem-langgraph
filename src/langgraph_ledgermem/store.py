@@ -1,13 +1,13 @@
-"""LangGraph ``BaseStore`` implementation backed by LedgerMem.
+"""LangGraph ``BaseStore`` implementation backed by Mnemo.
 
 LangGraph stores are addressed by ``(namespace, key)`` and hold arbitrary JSON
-values. We map this onto LedgerMem by:
+values. We map this onto Mnemo by:
 
 * Encoding the value as a JSON string in the memory ``content``.
 * Persisting ``namespace`` and ``key`` in the memory ``metadata`` so the same
   pair can be resolved later.
 
-Vector search over stored values is delegated to ``LedgerMem.search`` via the
+Vector search over stored values is delegated to ``Mnemo.search`` via the
 optional ``query`` field on ``SearchOp``.
 """
 
@@ -28,7 +28,7 @@ from langgraph.store.base import (
     SearchItem,
     SearchOp,
 )
-from ledgermem import LedgerMem
+from getmnemo import Mnemo
 
 
 def _ns_to_str(namespace: tuple[str, ...]) -> str:
@@ -39,10 +39,10 @@ def _str_to_ns(raw: str) -> tuple[str, ...]:
     return tuple(part for part in raw.split("/") if part)
 
 
-class LedgerMemStore(BaseStore):
-    """A LangGraph long-term store with LedgerMem as the backing memory layer."""
+class MnemoStore(BaseStore):
+    """A LangGraph long-term store with Mnemo as the backing memory layer."""
 
-    def __init__(self, client: LedgerMem) -> None:
+    def __init__(self, client: Mnemo) -> None:
         self._client = client
 
     # --- helpers -----------------------------------------------------------

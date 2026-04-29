@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ledgermem-langgraph"
+name = "getmnemo-langgraph"
 version = "0.1.0"
-description = "LangGraph BaseStore implementation backed by LedgerMem for cross-thread agent memory."
+description = "LangGraph BaseStore implementation backed by Mnemo for cross-thread agent memory."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
-authors = [{ name = "LedgerMem", email = "founders@proofly.dev" }]
-keywords = ["ledgermem", "langgraph", "memory", "store", "agents", "llm"]
+authors = [{ name = "Mnemo", email = "founders@getmnemo.xyz" }]
+keywords = ["getmnemo", "langgraph", "memory", "store", "agents", "llm"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -21,7 +21,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-  "ledgermem>=0.1",
+  "getmnemo>=0.1",
   "langgraph>=0.2",
   "langgraph-checkpoint>=2.0",
 ]
@@ -35,12 +35,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ledgermem/ledgermem-langgraph"
-Issues = "https://github.com/ledgermem/ledgermem-langgraph/issues"
-Source = "https://github.com/ledgermem/ledgermem-langgraph"
+Homepage = "https://github.com/getmnemo/getmnemo-langgraph"
+Issues = "https://github.com/getmnemo/getmnemo-langgraph/issues"
+Source = "https://github.com/getmnemo/getmnemo-langgraph"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/langgraph_ledgermem"]
+packages = ["src/langgraph_getmnemo"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
