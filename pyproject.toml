@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "getmnemo-langgraph"
+name = "mnemo-langgraph"
 version = "0.1.0"
 description = "LangGraph BaseStore implementation backed by Mnemo for cross-thread agent memory."
 readme = "README.md"
